@@ -1,0 +1,11 @@
+{
+  "name": "BlueRobo",
+  "description": "Col bluetooth",
+  "requestFramePermissions": [
+    "serial",
+    "bluetooth"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
