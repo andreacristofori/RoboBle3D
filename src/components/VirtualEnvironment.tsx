@@ -51,8 +51,8 @@ export default function VirtualEnvironment({
     renderer: THREE.WebGLRenderer;
     controls: OrbitControls;
     robotGroup: THREE.Group;
-    leftWheel: THREE.Mesh;
-    rightWheel: THREE.Mesh;
+    leftWheel: THREE.Group;
+    rightWheel: THREE.Group;
     ledScreenMesh: THREE.Mesh;
     ledTexture: THREE.CanvasTexture;
     ledCanvas: HTMLCanvasElement;
@@ -2277,16 +2277,25 @@ export default function VirtualEnvironment({
       robotGroup.add(robotBodyGroup);
       
       // Left Wheel
-      const wheelGeo = new THREE.CylinderGeometry(15, 15, 6, 32);
-      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5, metalness: 0.3 });
-      const leftWheel = new THREE.Mesh(wheelGeo, wheelMat);
+      const tireGeo = new THREE.CylinderGeometry(15, 15, 6, 32);
+      const tireMat = new THREE.MeshStandardMaterial({ color: 0x48c6de, roughness: 0.7, metalness: 0.1 });
+      const rimGeo = new THREE.CylinderGeometry(12.5, 12.5, 6.2, 32);
+      const rimMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8, metalness: 0.1 });
+      const spokeGeo = new THREE.BoxGeometry(22, 1, 2);
+      const spokeMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.5 });
+
+      const leftWheel = new THREE.Group();
       leftWheel.rotation.x = Math.PI / 2;
       leftWheel.position.set(0, 15, -25);
-      leftWheel.castShadow = true;
       robotGroup.add(leftWheel);
 
-      const spokeGeo = new THREE.BoxGeometry(26, 1, 2);
-      const spokeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+      const leftTire = new THREE.Mesh(tireGeo, tireMat);
+      leftTire.castShadow = true;
+      leftWheel.add(leftTire);
+
+      const leftRim = new THREE.Mesh(rimGeo, rimMat);
+      leftWheel.add(leftRim);
+
       const leftWheelSpoke1 = new THREE.Mesh(spokeGeo, spokeMat);
       leftWheelSpoke1.position.set(0, -3.1, 0);
       leftWheel.add(leftWheelSpoke1);
@@ -2295,11 +2304,17 @@ export default function VirtualEnvironment({
       leftWheel.add(leftWheelSpoke2);
 
       // Right Wheel
-      const rightWheel = new THREE.Mesh(wheelGeo, wheelMat);
+      const rightWheel = new THREE.Group();
       rightWheel.rotation.x = Math.PI / 2;
       rightWheel.position.set(0, 15, 25);
-      rightWheel.castShadow = true;
       robotGroup.add(rightWheel);
+
+      const rightTire = new THREE.Mesh(tireGeo, tireMat);
+      rightTire.castShadow = true;
+      rightWheel.add(rightTire);
+
+      const rightRim = new THREE.Mesh(rimGeo, rimMat);
+      rightWheel.add(rightRim);
 
       const rightWheelSpoke1 = new THREE.Mesh(spokeGeo, spokeMat);
       rightWheelSpoke1.position.set(0, 3.1, 0);
