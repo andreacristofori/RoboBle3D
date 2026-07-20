@@ -1618,9 +1618,9 @@ export default function VirtualEnvironment({
 
     if (sensor.type === 'force') {
       const forceIdx = forceSensors.findIndex(s => s.port === sensor.port);
-      if (forceSensors.length === 1) return { localX: 30, localY: 0 };
+      if (forceSensors.length === 1) return { localX: 25, localY: 0 };
       const spread = 12;
-      return { localX: 30, localY: -spread / 2 + (forceIdx / (forceSensors.length - 1)) * spread };
+      return { localX: 25, localY: -spread / 2 + (forceIdx / (forceSensors.length - 1)) * spread };
     }
 
     if (sensor.type === 'distance') {
@@ -1819,16 +1819,16 @@ export default function VirtualEnvironment({
           singleSensorGroup.add(beam);
         }
       } else if (sensor.type === 'force') {
-        const baseGeo = new THREE.BoxGeometry(6, 10, 10);
+        const baseGeo = new RoundedBoxGeometry(4, 8, 8, 2, 1);
         const baseMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 });
         const base = new THREE.Mesh(baseGeo, baseMat);
         singleSensorGroup.add(base);
 
-        const plungerGeo = new THREE.BoxGeometry(4, 8, 8);
+        const plungerGeo = new RoundedBoxGeometry(3, 6, 6, 2, 0.5);
         const plungerMat = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.5 });
         const plunger = new THREE.Mesh(plungerGeo, plungerMat);
         const isPressed = reading && reading.force > 0;
-        plunger.position.set(isPressed ? 3.1 : 4.5, 0, 0);
+        plunger.position.set(isPressed ? 2.1 : 3.0, 0, 0);
         singleSensorGroup.add(plunger);
       }
       t.sensorGroup.add(singleSensorGroup);
@@ -1889,7 +1889,7 @@ export default function VirtualEnvironment({
       }
 
       const isSelected = obs.id === selectedId;
-      const height = 24;
+      const height = 34; // increased by 3cm (10 units)
       const isCircle = obs.shape === 'circle';
 
       if (!obstacleGroup) {
