@@ -1875,7 +1875,7 @@ except: pass
                     <button
                       onClick={connect}
                       disabled={!isSerialSupported}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold transition-colors border-2 bg-neutral-200 hover:bg-neutral-300 text-black border-black shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold transition-colors border-2 bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       title="USB"
                     >
                       <Usb className="w-4 h-4" />
@@ -1883,7 +1883,7 @@ except: pass
                     <button
                       onClick={connectBluetooth}
                       disabled={!isBluetoothSupported}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold transition-colors border-2 bg-neutral-200 hover:bg-neutral-300 text-black border-black shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold transition-colors border-2 bg-blue-500 hover:bg-blue-600 text-white border-blue-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Bluetooth"
                     >
                       <Bluetooth className="w-4 h-4" />
