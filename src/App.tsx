@@ -1420,6 +1420,11 @@ except Exception as root_e:
   }, [logs]);
 
   const connect = async () => {
+    if (isConnected || port) {
+      setLogs(prev => prev + "Esiste già una connessione attiva. Disconnettiti prima di procedere.\n");
+      return;
+    }
+
     try {
       const p = await (navigator as any).serial.requestPort();
       await p.open({ baudRate: 115200 });
@@ -1459,6 +1464,11 @@ except Exception as root_e:
   };
 
   const connectBluetooth = async () => {
+    if (isConnected || port) {
+      setLogs(prev => prev + "Esiste già una connessione seriale. Disconnettiti prima di procedere con il Bluetooth.\n");
+      return;
+    }
+
     try {
       setLogs(prev => prev + "Richiesta dispositivo Bluetooth...\n");
       const device = await (navigator as any).bluetooth.requestDevice({
