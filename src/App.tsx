@@ -1755,7 +1755,7 @@ except: pass
             <div className="w-12 h-12 rounded-md flex items-center justify-center shadow-sm overflow-hidden bg-white border-2 border-black">
               <img src={logoStaarr} alt="Logo Staarr" className="w-full h-full object-contain" />
             </div>
-            <h1 className="font-semibold tracking-tight text-3xl">BlueRobo(2)</h1>
+            <h1 className="font-semibold tracking-tight text-3xl">BlueRobo(3)</h1>
           </div>
           <div className="flex items-center gap-4">
             <button
