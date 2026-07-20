@@ -1,5 +1,5 @@
 {
-  "name": "BlueRobo(3)",
+  "name": "BlueRobo(4)",
   "description": "Col bluetooth",
   "requestFramePermissions": [
     "serial",
