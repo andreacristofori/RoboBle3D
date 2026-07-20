@@ -860,14 +860,31 @@ pythonGenerator.forBlock['spike_color_sensor_color'] = function(block: any, gene
   return [code, generator.ORDER_ATOMIC];
 };
 
+let globalTractionConfig: any = null;
+
+export function updateGlobalTractionConfig(motors: any[]) {
+  if (motors && Array.isArray(motors)) {
+    const traction = motors.filter((m: any) => m.isTraction && m.port);
+    const left = traction[0] || { port: 'C', isInverted: true };
+    const right = traction[1] || { port: 'D', isInverted: false };
+    globalTractionConfig = {
+      leftPort: left.port,
+      rightPort: right.port,
+      leftInverted: !!left.isInverted,
+      rightInverted: !!right.isInverted
+    };
+  }
+}
+
 function getTractionConfig() {
+  if (globalTractionConfig) return globalTractionConfig;
   try {
     const saved = localStorage.getItem('spike_motors');
     if (saved) {
       const motors = JSON.parse(saved);
       const traction = motors.filter((m: any) => m.isTraction && m.port);
-      const left = traction[0] || { port: 'A', isInverted: false };
-      const right = traction[1] || { port: 'B', isInverted: false };
+      const left = traction[0] || { port: 'C', isInverted: true };
+      const right = traction[1] || { port: 'D', isInverted: false };
       return {
         leftPort: left.port,
         rightPort: right.port,
@@ -878,7 +895,7 @@ function getTractionConfig() {
   } catch (e) {
     console.error("Errore nel leggere config trazione:", e);
   }
-  return { leftPort: 'A', rightPort: 'B', leftInverted: false, rightInverted: false };
+  return { leftPort: 'C', rightPort: 'D', leftInverted: true, rightInverted: false };
 }
 
 pythonGenerator.forBlock['spike_robot_move'] = function(block: any, generator: any) {
@@ -1429,6 +1446,8 @@ const generateCodeFromWorkspace = (workspace: Blockly.WorkspaceSvg) => {
 
 const BlocklyEditor = forwardRef<BlocklyEditorRef, BlocklyEditorProps>(
   ({ onCodeChange, motors, sensors, wheelDiameter, wheelDistance, maxMotorSpeed, isVisible, isVirtualActive, onToggleVirtual, language = 'it' }, ref) => {
+    updateGlobalTractionConfig(motors || []);
+    
     const blocklyDiv = useRef<HTMLDivElement>(null);
     const workspaceRef = useRef<Blockly.WorkspaceSvg | null>(null);
     const [currentCode, setCurrentCode] = useState("");
@@ -1557,6 +1576,7 @@ import sys
 __stop_flag = False
 _is_running_user_code = False
 _WAIT_FIRST_TIME = False
+_paired_successfully = False
 
 _LEFT_PORT = port.${config.leftPort}
 _RIGHT_PORT = port.${config.rightPort}
@@ -1564,7 +1584,7 @@ _LEFT_INVERTED = ${config.leftInverted ? 'True' : 'False'}
 _RIGHT_INVERTED = ${config.rightInverted ? 'True' : 'False'}
 
 def _drive_pair(steering, velocity):
-    if not _LEFT_INVERTED and not _RIGHT_INVERTED:
+    if _paired_successfully and not _LEFT_INVERTED and not _RIGHT_INVERTED:
         try:
             motor_pair.move(motor_pair.PAIR_1, steering, velocity=velocity)
             return
@@ -1572,7 +1592,7 @@ def _drive_pair(steering, velocity):
             print("Fallback move:", e)
             pass
 
-    if _LEFT_INVERTED and _RIGHT_INVERTED:
+    if _paired_successfully and _LEFT_INVERTED and _RIGHT_INVERTED:
         try:
             motor_pair.move(motor_pair.PAIR_1, -steering, velocity=-velocity)
             return
@@ -1603,7 +1623,7 @@ async def _drive_pair_for_degrees(degrees, steering, velocity):
     if globals().get('__stop_flag', False):
         raise Exception("Programma Interrotto")
 
-    if not _LEFT_INVERTED and not _RIGHT_INVERTED:
+    if _paired_successfully and not _LEFT_INVERTED and not _RIGHT_INVERTED:
         try:
             try: await motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees, steering, velocity=velocity)
             except: motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees, steering, velocity=velocity)
@@ -1614,7 +1634,7 @@ async def _drive_pair_for_degrees(degrees, steering, velocity):
             print("Fallback move_for_degrees:", e)
             pass
 
-    if _LEFT_INVERTED and _RIGHT_INVERTED:
+    if _paired_successfully and _LEFT_INVERTED and _RIGHT_INVERTED:
         try:
             try: await motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees, -steering, velocity=-velocity)
             except: motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees, -steering, velocity=-velocity)
@@ -1691,8 +1711,9 @@ async def _drive_pair_for_degrees(degrees, steering, velocity):
         raise Exception("Programma Interrotto")
 
 def _stop_pair():
-    try: motor_pair.stop(motor_pair.PAIR_1)
-    except: pass
+    if _paired_successfully:
+        try: motor_pair.stop(motor_pair.PAIR_1)
+        except: pass
     try: motor.stop(_LEFT_PORT)
     except: pass
     try: motor.stop(_RIGHT_PORT)
@@ -1900,7 +1921,8 @@ async def _monitor_stop_button():
                     __stop_flag = True
                     try:
                         import motor_pair
-                        motor_pair.stop(motor_pair.PAIR_1)
+                        if globals().get('_paired_successfully', False):
+                            motor_pair.stop(motor_pair.PAIR_1)
                     except:
                         pass
                     try:
