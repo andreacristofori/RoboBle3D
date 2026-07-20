@@ -72,6 +72,7 @@ class BluetoothSerialPort {
   writable: any;
   _readableStreamController: any;
   protocol: string;
+  onDisconnect: (() => void) | null = null;
   _pendingResolvers: Map<number, (msg: Uint8Array) => void> = new Map();
   _buffer: number[] = [];
 
@@ -232,7 +233,18 @@ class BluetoothSerialPort {
   }
 
   async open() {
-    this.server = await this.device.gatt.connect();
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        this.server = await this.device.gatt.connect();
+        break;
+      } catch (e: any) {
+        retries--;
+        console.warn(`GATT connect failed. Retries left: ${retries}`, e);
+        if (retries === 0) throw e;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
     
     // Attendi mezzo secondo per dare tempo al dispositivo di completare la negoziazione GATT
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -328,6 +340,9 @@ class BluetoothSerialPort {
         try {
           this._readableStreamController.close();
         } catch(e) {}
+      }
+      if (this.onDisconnect) {
+        this.onDisconnect();
       }
     });
   }
@@ -1482,6 +1497,11 @@ except Exception as root_e:
       });
       setLogs(prev => prev + `Dispositivo selezionato: ${device.name || 'Sconosciuto'}. Connessione GATT in corso...\n`);
       const btPort = new BluetoothSerialPort(device);
+      btPort.onDisconnect = () => {
+        setLogs(prev => prev + "Dispositivo Bluetooth disconnesso.\n");
+        setIsConnected(false);
+        setPort(null);
+      };
       await btPort.open();
       setLogs(prev => prev + "Servizi GATT trovati. Setup completato.\n");
       setPort(btPort);
