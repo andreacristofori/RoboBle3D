@@ -659,6 +659,20 @@ export default function App() {
   const TOTAL_SLOTS = 6;
   const [isVirtualActive, setIsVirtualActive] = useState(false);
   const [language, setLanguage] = useState<'it' | 'en'>('it');
+
+  const [batteryState, setBatteryState] = useState<{
+    voltage: number | null;
+    current: number | null;
+    temperature: number | null;
+    percentage: number | null;
+    lastUpdated: Date | null;
+  }>({
+    voltage: null,
+    current: null,
+    temperature: null,
+    percentage: null,
+    lastUpdated: null,
+  });
   
   const [motors, setMotors] = useState<MotorConfig[]>(() => {
     const saved = localStorage.getItem('spike_motors');
@@ -1352,6 +1366,13 @@ except Exception as root_e:
   const readerRef = useRef<any>(null);
   const keepReadingRef = useRef<boolean>(false);
   const readLoopPromiseRef = useRef<Promise<void> | null>(null);
+  const isBatteryScriptUploadedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!isConnected || !port) {
+      isBatteryScriptUploadedRef.current = false;
+    }
+  }, [isConnected, port]);
 
   useEffect(() => {
     if (!('serial' in navigator)) {
@@ -1364,6 +1385,64 @@ except Exception as root_e:
       setIsInIframe(true);
     }
   }, []);
+
+  const queryBatteryFromRobot = useCallback(async () => {
+    if (!port || isExecuting) return;
+    
+    const queryCode = `import hub
+try:
+    v = hub.battery_voltage()
+    c = hub.battery_current()
+    t = hub.battery_temperature()
+    print("BATT_INFO:v={},c={},t={}".format(v, c, t))
+except:
+    try:
+        v = hub.battery.voltage()
+        c = hub.battery.current()
+        t = hub.battery.temperature()
+        print("BATT_INFO:v={},c={},t={}".format(v, c, t))
+    except:
+        pass
+`;
+
+    try {
+      const isSpike3 = (port as any).protocol === 'spike3';
+      if (!isSpike3 && port.writable) {
+        if (!port.writable.locked) {
+          const writer = port.writable.getWriter();
+          const encoder = new TextEncoder();
+          await writer.write(encoder.encode(String.fromCharCode(3) + String.fromCharCode(5)));
+          await new Promise(r => setTimeout(r, 80));
+          await writer.write(encoder.encode(queryCode + '\r\n'));
+          await new Promise(r => setTimeout(r, 80));
+          await writer.write(encoder.encode(String.fromCharCode(4)));
+          writer.releaseLock();
+        }
+      } else if (isSpike3) {
+        if (port.writable && !port.writable.locked) {
+          if (!isBatteryScriptUploadedRef.current) {
+            await (port as any).uploadSpike3Program(queryCode, 5, "battery.py");
+            isBatteryScriptUploadedRef.current = true;
+            await new Promise(r => setTimeout(r, 100));
+          }
+          await (port as any).startSpike3Program(5);
+        }
+      }
+    } catch (err) {
+      console.warn("Errore durante l'interrogazione automatica della batteria:", err);
+    }
+  }, [port, isExecuting]);
+
+  useEffect(() => {
+    if (!isConnected || !port || isExecuting || isVirtualActive || !isSetupOpen) return;
+
+    // Leggi una volta all'apertura del pannello Setup
+    queryBatteryFromRobot();
+    
+    // Evitiamo il polling continuo ogni 15 secondi per eliminare paranoie,
+    // interruzioni improvvise di programmi in esecuzione o congestioni sulla porta seriale.
+    // L'utente può aggiornare quando desidera usando il pulsante "Aggiorna".
+  }, [isConnected, port, isExecuting, isVirtualActive, isSetupOpen, queryBatteryFromRobot]);
 
   useEffect(() => {
     if (!port) return;
@@ -1385,7 +1464,29 @@ except Exception as root_e:
                 const text = new TextDecoder().decode(value);
                 setLogs(prev => {
                   const newLogs = prev + text;
-                  // Keep only last 5000 characters to prevent memory issues
+                  
+                  // Extract battery telemetry if present (supporting float values)
+                  const batteryMatch = newLogs.match(/BATT_INFO:v=(-?\d+(?:\.\d+)?),c=(-?\d+(?:\.\d+)?),t=(-?\d+(?:\.\d+)?)/);
+                  if (batteryMatch) {
+                    const v = parseFloat(batteryMatch[1]);
+                    const c = parseFloat(batteryMatch[2]);
+                    const t = parseFloat(batteryMatch[3]);
+                    
+                    setTimeout(() => {
+                      setBatteryState({
+                        voltage: v,
+                        current: c,
+                        temperature: t,
+                        percentage: Math.max(0, Math.min(100, Math.round(((v - 6400) / 1800) * 100))),
+                        lastUpdated: new Date()
+                      });
+                    }, 0);
+
+                    // Clean the BATT_INFO line from logs to keep terminal pristine
+                    const cleanedLogs = newLogs.replace(/BATT_INFO:v=-?\d+(?:\.\d+)?,c=-?\d+(?:\.\d+)?,t=-?\d+(?:\.\d+)?\r?\n?/, '');
+                    return cleanedLogs.length > 5000 ? cleanedLogs.slice(-5000) : cleanedLogs;
+                  }
+                  
                   return newLogs.length > 5000 ? newLogs.slice(-5000) : newLogs;
                 });
               }
@@ -1501,6 +1602,13 @@ except Exception as root_e:
         setLogs(prev => prev + "Dispositivo Bluetooth disconnesso.\n");
         setIsConnected(false);
         setPort(null);
+        setBatteryState({
+          voltage: null,
+          current: null,
+          temperature: null,
+          percentage: null,
+          lastUpdated: null,
+        });
       };
       await btPort.open();
       setLogs(prev => prev + "Servizi GATT trovati. Setup completato.\n");
@@ -1581,6 +1689,13 @@ except Exception as root_e:
         await port.close();
         setPort(null);
         setIsConnected(false);
+        setBatteryState({
+          voltage: null,
+          current: null,
+          temperature: null,
+          percentage: null,
+          lastUpdated: null,
+        });
         setLogs(prev => prev + "Disconnesso.\n");
       } catch (err: any) {
         console.error(err);
@@ -2244,6 +2359,88 @@ except: pass
                         </div>
                       </div>
                       <p className="text-[10px] font-medium leading-tight text-neutral-500">{language === 'en' ? 'Used to calculate the curve radius.' : 'Distanza interasse per le curve.'}</p>
+                    </div>
+                  </div>
+
+                  {/* Stato Batteria */}
+                  <div className="flex flex-col mt-4">
+                    <h3 className="font-extrabold text-base text-emerald-800 mb-2 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-100 border-2 border-emerald-300 w-fit shadow-sm">
+                      🔋 {language === 'en' ? 'Robot Battery' : 'Batteria Robot'}
+                    </h3>
+                    <div className="p-3 bg-white rounded-xl border-2 border-emerald-300 shadow-sm space-y-3">
+                      {!isConnected ? (
+                        <div className="text-center py-4 text-neutral-500 text-xs italic">
+                          {language === 'en' ? 'Connect the robot to view battery status' : 'Connetti il robot per vedere la batteria'}
+                        </div>
+                      ) : batteryState.percentage === null ? (
+                        <div className="flex flex-col items-center justify-center py-4 gap-2">
+                          <span className="text-xs text-neutral-500 italic animate-pulse">
+                            {language === 'en' ? 'Reading battery status...' : 'Lettura stato batteria...'}
+                          </span>
+                          <button
+                            onClick={queryBatteryFromRobot}
+                            className="px-3 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-[10px] rounded border border-neutral-300 transition-all uppercase tracking-wider"
+                          >
+                            {language === 'en' ? 'Read Now' : 'Leggi Ora'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* Battery Level Visual */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between items-center text-xs font-extrabold">
+                              <span className="text-neutral-600">
+                                {language === 'en' ? 'Charge level' : 'Livello carica'}
+                              </span>
+                              <span className={`text-sm ${
+                                batteryState.percentage > 50 ? 'text-emerald-600' :
+                                batteryState.percentage > 20 ? 'text-amber-600' : 'text-red-600'
+                              }`}>
+                                {batteryState.percentage}% {batteryState.current !== null && batteryState.current < 0 ? '⚡' : ''}
+                              </span>
+                            </div>
+                            <div className="w-full bg-neutral-100 rounded-full h-3.5 border-2 border-neutral-200 overflow-hidden p-0.5">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  batteryState.percentage > 50 ? 'bg-emerald-500' :
+                                  batteryState.percentage > 20 ? 'bg-amber-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${batteryState.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Telemetry Grid */}
+                          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-dashed border-neutral-100 text-[10px] font-mono text-neutral-600">
+                            <div className="bg-neutral-50 p-1.5 rounded border border-neutral-100">
+                              <div className="text-[9px] font-bold text-neutral-400 uppercase">Tensione</div>
+                              <div className="font-bold text-neutral-800">
+                                {batteryState.voltage ? (batteryState.voltage / 1000).toFixed(2) : '--'} V
+                              </div>
+                            </div>
+                            <div className="bg-neutral-50 p-1.5 rounded border border-neutral-100">
+                              <div className="text-[9px] font-bold text-neutral-400 uppercase">Corrente</div>
+                              <div className="font-bold text-neutral-800">
+                                {batteryState.current !== null ? `${batteryState.current} mA` : '--'}
+                              </div>
+                            </div>
+                            <div className="bg-neutral-50 p-1.5 rounded border border-neutral-100 col-span-2 flex justify-between items-center">
+                              <div>
+                                <span className="text-[9px] font-bold text-neutral-400 uppercase block">Temperatura</span>
+                                <span className="font-bold text-neutral-800">
+                                  {batteryState.temperature ? (batteryState.temperature > 100 ? (batteryState.temperature / 10).toFixed(1) : batteryState.temperature.toFixed(1)) : '--'} °C
+                                </span>
+                              </div>
+                              <button
+                                onClick={queryBatteryFromRobot}
+                                className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded text-[9px] uppercase tracking-wider transition-all"
+                              >
+                                {language === 'en' ? 'Refresh' : 'Aggiorna'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
